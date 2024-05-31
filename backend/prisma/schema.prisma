@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id      Int    @id @default(autoincrement())
+  name    String
+  email   String @unique
+  address String @unique
+  tasks   Task[]
+}
+
+model Worker {
+  id             Int          @id @default(autoincrement()) //@id make it a primary key and @default(autoincrement()) make it autoincrement
+  address        String       @unique // @unique make it a unique key
+  submissions    Submission[] // defines a one-to-many relationship between the "Worker" model and another model named "Submission".
+  pending_amount Int // amount in lamports (* 10^9) //amount to be paid to the worker, if worker want to withdraw, amount goes from pending to locked
+  locked_amount  Int // amount being processed in the blockchain. yet to be confirmed, once confirmed, it will be set to 0
+  Payouts        Payouts[]
+}
+
+model Task {
+  id          Int          @id @default(autoincrement())
+  title       String?      @default("Select the most clickable thumbnail")
+  options     Option[]
+  user_id     Int
+  user        User         @relation(fields: [user_id], references: [id])
+  signature   String
+  amount      String
+  done        Boolean      @default(false)
+  submissions Submission[]
+}
+
+model Option {
+  id          Int          @id @default(autoincrement())
+  image_url   String
+  task_id     Int
+  task        Task         @relation(fields: [task_id], references: [id]) // defines a many-to-one relationship between the "Option" model and another model named "Task".
+  submissions Submission[]
+}
+
+model Submission {
+  id        Int    @id @default(autoincrement())
+  worker_id Int
+  worker    Worker @relation(fields: [worker_id], references: [id])
+  option_id Int
+  option    Option @relation(fields: [option_id], references: [id])
+  task_id   Int
+  task      Task   @relation(fields: [task_id], references: [id])
+  amount    Int
+
+  @@unique([worker_id, task_id])
+}
+
+model Payouts {
+  id        Int       @id @default(autoincrement())
+  worker_id Int
+  worker    Worker    @relation(fields: [worker_id], references: [id]) // This specifies that the user_id field in the Payouts model references the id field in the User model.
+  amount    Int
+  signature String
+  status    TxnStatus
+}
+
+enum TxnStatus {
+  Processing
+  Success
+  Failure
+}
+
+// how many times option 1 was voted, option 2 was voted, option 3 was voted, and option 4 was voted
+model SubmissionsStats {
+  id      Int @id @default(autoincrement())
+  task_id Int
+  option1 Int
+  option2 Int
+  option3 Int
+  option4 Int
+}
