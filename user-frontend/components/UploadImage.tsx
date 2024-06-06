@@ -53,7 +53,7 @@ export function UploadImage({onImageAdded, image}: {
     }
 
     if (image) {
-        return <Image alt="your image" width="500" height="500" className={"p-2 w-96 rounded"} src={image}/>
+        return <Image alt="your image" width="500" height="500" className={"p-2 w-80 rounded aspect-video"} src={image}/>
     }
 
     return <div>

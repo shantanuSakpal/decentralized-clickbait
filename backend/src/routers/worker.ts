@@ -1,6 +1,7 @@
 import e, {Router} from "express";
 import {PrismaClient} from "@prisma/client";
 import jwt from "jsonwebtoken"
+import {encode, decode} from "bs58"
 import {
     S3Client,
     GetObjectCommand,
@@ -14,7 +15,11 @@ import {authMiddleware, workerMiddleware} from "../middleware";
 import {createSubmissionInput, createTaskInput, Option, Submission, Worker, Task, userDetails} from "../types";
 import {getNextTask} from "../db";
 import user from "./user";
+import nacl from "tweetnacl";
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 
+const connection = new Connection(`https://solana-devnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`);
 const router = Router();
 const prismaClient = new PrismaClient()
 const DEFAULT_TITLE = "Click the most appealing thumbnail"
@@ -31,10 +36,101 @@ const s3config: S3ClientConfig = {
         secretAccessKey: AWS_SECRET_ACCESS_KEY
     }
 }
-
+const PRIVATE_KEY = process.env.NEXT_PUBLIC_PRIVATE_KEY
 const s3Client = new S3Client(s3config);
 const TOTAL_SUBMISSIONS = 100;
-//routes
+const TOTAL_DECIMALS = 1000_000;
+
+
+
+//payout
+router.post("/payout", workerMiddleware, async (req, res) => {
+    // @ts-ignore
+    const userId: string = req.userId;
+    console.log("userId", userId)
+
+    const worker = await prismaClient.worker.findFirst({
+        where: {id: Number(userId)}
+
+    })
+
+    if (!worker) {
+        return res.status(403).json({
+            message: "Worker not found"
+        })
+    }
+
+
+    const transaction = new Transaction().add(
+        SystemProgram.transfer({
+            fromPubkey: new PublicKey("FrzdaX3Mwa8FRfeuXo9vTd7XVQvu6mauPMkCKkp4mP72"),
+            toPubkey: new PublicKey(worker.address),
+            lamports:  worker.pending_amount,
+        })
+    );
+
+
+    console.log("payment inittaiated to ",worker.address);
+//convert string to uintarray
+// @ts-ignore
+    const secretKey = decode(PRIVATE_KEY);
+    const keypair = Keypair.fromSecretKey(secretKey);
+
+    // TODO: There's a double spending problem here
+    // The user can request the withdrawal multiple times
+    // Can u figure out a way to fix it?
+    let signature = "";
+    try {
+        signature = await sendAndConfirmTransaction(
+            connection,
+            transaction,
+            [keypair],
+        );
+
+    } catch(e) {
+        return res.json({
+            message: "Transaction failed"
+        })
+    }
+
+    console.log(signature)
+
+    //update the worker's pending and locked amount
+    await prismaClient.$transaction(async tx => {
+        await tx.worker.update({
+            where: {
+                id: Number(userId)
+            },
+            data: {
+                pending_amount: {
+                    decrement: worker.pending_amount
+                },
+                locked_amount: {
+                    increment: worker.pending_amount
+                }
+            }
+        })
+
+        await tx.payouts.create({
+            data: {
+                worker_id: Number(userId),
+                amount: worker.pending_amount,
+                status: "Processing",
+                signature: signature
+            }
+        })
+    })
+
+    //send transaction to solana blockchain
+    //actual payout logic
+    res.json({
+        message:"transaction initieated"
+    })
+})
+
+
+
+
 
 //to get balance
 router.get("/balance", workerMiddleware, async (req, res) => {
@@ -154,28 +250,30 @@ router.get("/generateDownloadUrl", authMiddleware, async (req: any, res: any) =>
 //sign in with wallet
 //signing a message
 router.post("/auth/signin", async (req: any, res: any) => {
-    // todo: sign in with wallet
-    const body = req.body;
-//check if body is correct
-    const parseData = userDetails.safeParse(body)
+    const {publicKey, signature} = req.body;
+    const date = new Date().getHours()
+    const message = new TextEncoder().encode(`Sign in with your Solana account on ${date}`);
 
-    if (!parseData.success) {
+    const result = nacl.sign.detached.verify(
+        message,
+        new Uint8Array(signature.data),
+        new PublicKey(publicKey).toBytes(),
+    );
+
+    console.log("signin", result)
+    if (!result) {
         return res.status(411).json({
-            message: "please pass address",
-            error: parseData.error
+            message: "Incorrect signature"
         })
     }
-    const walletAddress = parseData.data.address
-    const email = parseData.data.email
-    const username = parseData.data.username
-    //get the userId from db, upsert is like, if user exits, return it, else create it
+
     const user = await prismaClient.worker.upsert({
         where: {
-            address: walletAddress
+            address: publicKey
         },
         update: {},
         create: {
-            address: walletAddress,
+            address: publicKey,
             pending_amount: 0,
             locked_amount: 0
         }
@@ -190,55 +288,5 @@ router.post("/auth/signin", async (req: any, res: any) => {
 
 });
 
-//payout
-router.post("/payout", workerMiddleware, async (req, res) => {
-    // @ts-ignore
-    const userId: string = req.userId;
-    console.log("userId", userId)
-    const worker = await prismaClient.worker.findFirst({
-        where: {id: Number(userId)}
-
-    })
-
-    if (!worker) {
-        return res.status(403).json({
-            message: "Worker not found"
-        })
-    }
-
-    const address = worker.address
-    const txnId = "0xasdfadsffadsf"
-
-    await prismaClient.$transaction(async tx => {
-        await tx.worker.update({
-            where: {
-                id: Number(userId)
-            },
-            data: {
-                pending_amount: {
-                    decrement: worker.pending_amount
-                },
-                locked_amount: {
-                    increment: worker.pending_amount
-                }
-            }
-        })
-
-        await tx.payouts.create({
-            data: {
-                worker_id: Number(userId),
-                amount: worker.pending_amount,
-                status: "Processing",
-                signature: txnId
-            }
-        })
-    })
-
-    //send transaction to solana blockchain
-    //actual payout logic
-    res.json({
-        message:"transaction initieated"
-    })
-})
 
 export default router;

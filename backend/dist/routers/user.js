@@ -21,8 +21,10 @@ const middleware_1 = require("../middleware");
 const types_1 = require("../types");
 const s3_presigned_post_1 = require("@aws-sdk/s3-presigned-post");
 const db_1 = require("../db");
-const router = (0, express_1.Router)();
-const prismaClient = new client_1.PrismaClient();
+const tweetnacl_1 = __importDefault(require("tweetnacl"));
+const web3_js_1 = require("@solana/web3.js");
+const PARENT_WALLET_ADDRESS = process.env.PARENT_WALLET_ADDRESS;
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 const DEFAULT_TITLE = "Click the most appealing thumbnail";
 const JWT_SECRET = process.env.JWT_SECRET;
 // @ts-ignore
@@ -38,6 +40,9 @@ const s3config = {
     }
 };
 const s3Client = new client_s3_1.S3Client(s3config);
+const connection = new web3_js_1.Connection(`https://solana-devnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`);
+const router = (0, express_1.Router)();
+const prismaClient = new client_1.PrismaClient();
 //routes
 router.post("/generateUploadUrl", middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const userId = req.userId;
@@ -103,6 +108,48 @@ router.post("/getTask", middleware_1.authMiddleware, (req, res) => __awaiter(voi
         task: task
     });
 }));
+//check transaction
+router.post("/checkTx", middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d, _e, _f;
+    const body = req.body;
+    //@ts-ignore
+    const userId = req.userId;
+    //check if body is correct
+    const signature = body.signature;
+    const user = yield prismaClient.user.findFirst({
+        where: {
+            id: userId
+        }
+    });
+    console.log("verigiying payment backend", signature);
+    //verfiy payment
+    const transaction = yield connection.getTransaction(signature.toString(), {
+        maxSupportedTransactionVersion: 1
+    });
+    //
+    console.log(transaction);
+    //check if amount = 0.1 sol
+    if (((_b = (_a = transaction === null || transaction === void 0 ? void 0 : transaction.meta) === null || _a === void 0 ? void 0 : _a.postBalances[1]) !== null && _b !== void 0 ? _b : 0) - ((_d = (_c = transaction === null || transaction === void 0 ? void 0 : transaction.meta) === null || _c === void 0 ? void 0 : _c.preBalances[1]) !== null && _d !== void 0 ? _d : 0) !== 100000000) {
+        return res.status(411).json({
+            message: "Transaction signature/amount incorrect"
+        });
+    }
+    //check if parent wallet address is same
+    if (((_e = transaction === null || transaction === void 0 ? void 0 : transaction.transaction.message.getAccountKeys().get(1)) === null || _e === void 0 ? void 0 : _e.toString()) !== PARENT_WALLET_ADDRESS) {
+        return res.status(411).json({
+            message: "Transaction sent to wrong address"
+        });
+    }
+    //check this money paid by this user address or a different address?
+    if (((_f = transaction === null || transaction === void 0 ? void 0 : transaction.transaction.message.getAccountKeys().get(0)) === null || _f === void 0 ? void 0 : _f.toString()) !== (user === null || user === void 0 ? void 0 : user.address)) {
+        return res.status(411).json({
+            message: "Transaction sent from wrong address"
+        });
+    }
+    res.status(200).json({
+        message: "payment valid"
+    });
+}));
 //this route will generate tasks, given options and title
 router.post("/addTask", middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const body = req.body;
@@ -118,10 +165,10 @@ router.post("/addTask", middleware_1.authMiddleware, (req, res) => __awaiter(voi
     }
     //a transaction makes sure both the transactions are fully carried out, or none of them do, so we do not create a half transaction
     const response = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
-        var _a;
+        var _g;
         let task = yield tx.task.create({
             data: {
-                title: (_a = parseData.data.title) !== null && _a !== void 0 ? _a : DEFAULT_TITLE,
+                title: (_g = parseData.data.title) !== null && _g !== void 0 ? _g : DEFAULT_TITLE,
                 signature: parseData.data.signature,
                 amount: parseData.data.amount,
                 user_id: userId,
@@ -158,29 +205,25 @@ router.get("/generateDownloadUrl", middleware_1.authMiddleware, (req, res) => __
 //sign in with wallet
 //signing a message
 router.post("/auth/signin", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    // todo: sign in with wallet
-    const body = req.body;
-    //check if body is correct
-    const parseData = types_1.userDetails.safeParse(body);
-    if (!parseData.success) {
+    const { publicKey, signature } = req.body;
+    const date = new Date().getHours();
+    const message = new TextEncoder().encode(`Sign in with your Solana account on ${date}`);
+    const result = tweetnacl_1.default.sign.detached.verify(message, new Uint8Array(signature.data), new web3_js_1.PublicKey(publicKey).toBytes());
+    console.log("signin", result);
+    if (!result) {
         return res.status(411).json({
-            message: "please pass address",
-            error: parseData.error
+            message: "Incorrect signature"
         });
     }
-    const walletAddress = parseData.data.address;
-    const email = parseData.data.email;
-    const username = parseData.data.username;
     //get the userId from db, upsert is like, if user exits, return it, else create it
     const user = yield prismaClient.user.upsert({
         where: {
-            address: walletAddress
+            address: publicKey
         },
         update: {},
         create: {
-            address: walletAddress,
-            email: email || "",
-            name: username || "user"
+            address: publicKey,
+            name: "user"
         }
     });
     const token = jsonwebtoken_1.default.sign({

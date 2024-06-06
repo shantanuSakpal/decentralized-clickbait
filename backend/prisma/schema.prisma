@@ -1,5 +1,8 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
+// if made any changesn in schema, run
+// 1. ```npx prisma migrate dev --name "some-name"```
+// 2. ```npx prisma generate```
 
 generator client {
   provider = "prisma-client-js"
@@ -13,7 +16,6 @@ datasource db {
 model User {
   id      Int    @id @default(autoincrement())
   name    String
-  email   String @unique
   address String @unique
   tasks   Task[]
 }

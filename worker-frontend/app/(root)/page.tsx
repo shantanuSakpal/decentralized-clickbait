@@ -31,7 +31,7 @@ export default function Home() {
 
             setLoading(false);
             return response.data.task;
-        } catch (error:any) {
+        } catch (error: any) {
             // Handle other errors here
             console.error('Error:', error.response.data.message);
             setLoading(false);
@@ -85,21 +85,24 @@ export default function Home() {
         )
 
     }, [])
-
+    const user = localStorage.getItem("token")
     return (
         <main>
             <Appbar balance={balance}/>
             <Hero/>
             {
-                loading ? (
-                    <p className="p-5 font-bold w-full text-center">Loading task...</p>
-                ) : (
-                    <CurrentTask handleOptionClick={handleOptionClick} task={currentTask}/>
-                )
-            }
-            {
-                submitting && <p className="p-5 font-bold w-full text-center">Submitting...</p>
+                user ? (
 
+                    loading ? (
+                        <p className="p-5 font-bold w-full text-center">Loading task...</p>
+                    ) : (
+                        <CurrentTask handleOptionClick={handleOptionClick} task={currentTask}/>
+                    )
+
+
+                ) : (
+                    <p className="p-10 text-2xl">Not logged in</p>
+                )
             }
         </main>
     );

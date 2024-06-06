@@ -13,7 +13,9 @@ export const createTaskInput = z.object({
 
 
 export const userDetails = z.object({
-    address: z.string(),
+    signature: z.string(),
+    publicKey:z.string(),
+    address : z.string(),
     username: z.string().optional(),
     email: z.string().optional()
 })

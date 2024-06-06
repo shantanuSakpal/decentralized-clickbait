@@ -14,6 +14,8 @@ exports.createTaskInput = zod_1.default.object({
     amount: zod_1.default.string()
 });
 exports.userDetails = zod_1.default.object({
+    signature: zod_1.default.string(),
+    publicKey: zod_1.default.string(),
     address: zod_1.default.string(),
     username: zod_1.default.string().optional(),
     email: zod_1.default.string().optional()

@@ -6,15 +6,79 @@ import axios from "axios";
 import {useRouter} from "next/navigation";
 import {useWallet, useConnection} from '@solana/wallet-adapter-react';
 
+const PARENT_WALLET_ADDRESS = "FrzdaX3Mwa8FRfeuXo9vTd7XVQvu6mauPMkCKkp4mP72"
+import {toast} from 'react-toastify';
+import {WalletSendTransactionError} from "@solana/wallet-adapter-base";
+
 function Upload() {
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
     const [images, setImages] = useState<Array<{ imageUrl: string }>>([]);
     const [title, setTitle] = useState("");
-    const [txSignature, setTxSignature] = useState("user-sign");
+    const [txSignature, setTxSignature] = useState<string>();
     const [loading, setLoading] = useState(false);
     const [amount, setAmount] = useState("");
     const router = useRouter();
+    const {publicKey, sendTransaction} = useWallet();
+    const {connection} = useConnection();
+
+
+    async function checkTransaction(signature: string) {
+        const headers = {
+            'Content-Type': 'application/json',
+            'authorization': localStorage.getItem("token")
+        }
+        console.log("frontend verifgyo...", signature)
+        const data = {
+
+            "signature": signature,
+
+        }
+        const response = await axios.post(`${BACKEND_URL}/v1/user/checkTx`, data, {
+            headers: headers
+        });
+        console.log(response.data)
+        return response.data
+    }
+
+    async function makePayment() {
+
+        try {
+            if (!publicKey) {
+                toast.error('Please connect your wallet to continue.');
+                return;
+            }
+
+            const transaction = new Transaction().add(
+                SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: new PublicKey(PARENT_WALLET_ADDRESS),
+                    lamports: 100000000,
+                })
+            );
+
+            const {
+                context: {slot: minContextSlot},
+                value: {blockhash, lastValidBlockHeight}
+            } = await connection.getLatestBlockhashAndContext();
+
+            const signature = await sendTransaction(transaction, connection, {minContextSlot});
+
+            await connection.confirmTransaction({blockhash, lastValidBlockHeight, signature});
+            setTxSignature(signature);
+            toast.success('Payment successful!');
+            console.log('signature', signature);
+
+        } catch (error) {
+            if (error instanceof WalletSendTransactionError) {
+                toast.error('User rejected the transaction.');
+            } else {
+                toast.error('An error occurred while making the payment.');
+                console.error('Error in makePayment:', error);
+            }
+        }
+    }
+
 
     async function onSubmit() {
 
@@ -26,12 +90,7 @@ function Upload() {
             setLoading(false);
             return;
         }
-        //check value of amount
-        if (Number(amount) < 0.1) {
-            alert("Amount should be atleast 0.1 SOL");
-            setLoading(false);
-            return;
-        }
+
         const headers = {
             'Content-Type': 'application/json',
             'authorization': localStorage.getItem("token")
@@ -50,17 +109,15 @@ function Upload() {
 
         setLoading(false);
         console.log("task added successfully with id- ", response.data.task_id)
+        toast.success('Task added successfully!');
         router.push("/")
         return response.data.task_id
 
     }
 
-    async function makePayment() {
-
-    }
-
     return (
         <div className="flex justify-center">
+
             <div className="max-w-screen-lg w-full">
                 <div className="text-xl font-bold text-left pt-2 w-full pl-4">
                     Create new task
@@ -102,7 +159,10 @@ function Upload() {
                             <p>Creating task...</p>
 
                         ) : (
-                            <button onClick={txSignature ? onSubmit : makePayment} type="button"
+                            <button onClick={() => {
+                                //1,000,000,000 lamports = 1 sol
+                                txSignature ? onSubmit() : makePayment()
+                            }} type="button"
                                     className="mt-4 text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-300 font-medium rounded-full text-sm px-5 py-2.5 me-2 mb-2 dark:bg-gray-800 dark:hover:bg-gray-700 dark:focus:ring-gray-700 dark:border-gray-700">
                                 {txSignature ? "Submit Task" : "Pay 0.1 SOL"}
                             </button>

@@ -13,11 +13,14 @@ import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {authMiddleware} from "../middleware";
 import {createTaskInput, Option, Submission, userDetails} from "../types";
 import {createPresignedPost} from '@aws-sdk/s3-presigned-post'
-import {where} from "sequelize";
 import {getTask} from "../db";
+import nacl from 'tweetnacl'
+import {string} from "zod";
+import {Connection, PublicKey, Transaction} from "@solana/web3.js";
 
-const router = Router();
-const prismaClient = new PrismaClient()
+
+const PARENT_WALLET_ADDRESS = process.env.PARENT_WALLET_ADDRESS;
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 const DEFAULT_TITLE = "Click the most appealing thumbnail"
 const JWT_SECRET = process.env.JWT_SECRET
 // @ts-ignore
@@ -34,6 +37,10 @@ const s3config: S3ClientConfig = {
 }
 
 const s3Client = new S3Client(s3config);
+const connection = new Connection(`https://solana-devnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`);
+const router = Router();
+const prismaClient = new PrismaClient()
+
 
 //routes
 router.post("/generateUploadUrl", authMiddleware, async (req: any, res: any) => {
@@ -115,6 +122,54 @@ router.post("/getTask", authMiddleware, async (req, res) => {
 })
 
 
+//check transaction
+router.post("/checkTx", authMiddleware, async (req, res) => {
+    const body = req.body;
+    //@ts-ignore
+    const userId = req.userId;
+    //check if body is correct
+    const signature = body.signature
+    const user = await prismaClient.user.findFirst({
+        where: {
+            id: userId
+        }
+    })
+    console.log("verigiying payment backend", signature)
+
+    //verfiy payment
+    const transaction = await connection.getTransaction(signature.toString(), {
+        maxSupportedTransactionVersion: 1
+    });
+    //
+    console.log(transaction);
+    //check if amount = 0.1 sol
+    if ((transaction?.meta?.postBalances[1] ?? 0) - (transaction?.meta?.preBalances[1] ?? 0) !== 100000000) {
+        return res.status(411).json({
+            message: "Transaction signature/amount incorrect"
+        })
+    }
+    //check if parent wallet address is same
+    if (transaction?.transaction.message.getAccountKeys().get(1)?.toString() !== PARENT_WALLET_ADDRESS) {
+        return res.status(411).json({
+            message: "Transaction sent to wrong address"
+        })
+    }
+    //check this money paid by this user address or a different address?
+    if (transaction?.transaction.message.getAccountKeys().get(0)?.toString() !== user?.address) {
+        return res.status(411).json({
+            message: "Transaction sent from wrong address"
+        })
+    }
+
+
+    res.status(200).json({
+        message: "payment valid"
+    })
+
+
+})
+
+
 //this route will generate tasks, given options and title
 router.post("/addTask", authMiddleware, async (req, res) => {
     const body = req.body;
@@ -181,30 +236,31 @@ router.get("/generateDownloadUrl", authMiddleware, async (req: any, res: any) =>
 //sign in with wallet
 //signing a message
 router.post("/auth/signin", async (req: any, res: any) => {
-    // todo: sign in with wallet
-    const body = req.body;
-//check if body is correct
-    const parseData = userDetails.safeParse(body)
+    const {publicKey, signature} = req.body;
+    const date = new Date().getHours()
+    const message = new TextEncoder().encode(`Sign in with your Solana account on ${date}`);
 
-    if (!parseData.success) {
+    const result = nacl.sign.detached.verify(
+        message,
+        new Uint8Array(signature.data),
+        new PublicKey(publicKey).toBytes(),
+    );
+
+    console.log("signin", result)
+    if (!result) {
         return res.status(411).json({
-            message: "please pass address",
-            error: parseData.error
+            message: "Incorrect signature"
         })
     }
-    const walletAddress = parseData.data.address
-    const email = parseData.data.email
-    const username = parseData.data.username
     //get the userId from db, upsert is like, if user exits, return it, else create it
     const user = await prismaClient.user.upsert({
         where: {
-            address: walletAddress
+            address: publicKey
         },
         update: {},
         create: {
-            address: walletAddress,
-            email: email || "",
-            name: username || "user"
+            address: publicKey,
+            name: "user"
         }
     });
 

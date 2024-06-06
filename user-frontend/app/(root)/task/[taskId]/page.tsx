@@ -4,6 +4,7 @@ import Appbar from "@/components/Appbar";
 import axios from "axios";
 import {Task} from "@/types";
 import Image from "next/image";
+import Link from "next/link";
 
 function Page(props:any) {
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
@@ -64,7 +65,8 @@ const [stats,setStats] = useState()
                 ) : (
                     task.id ? (
                         <div className="p-5 w-full">
-                            <h2 className="text-xl font-bold ">{task.title}</h2>
+                            <Link href="/" className="flex gap-2 items-center justify-center px-2 py-1 text-sm  bg-gray-200 rounded-lg w-fit hover:bg-gray-300"><span>&larr;</span><p>Back to dashboard</p></Link>
+                            <h2 className="text-xl font-bold mt-5">{task.title}</h2>
                             <p>Reward: {Number(task.amount) / 1000} eth</p>
                             <div className="flex gap-3 flex-wrap p-5 justify-center">
                                 {task.options?.map((option: { id: number; image_url: string; }) => (
