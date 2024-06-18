@@ -131,13 +131,13 @@ function Upload() {
                        className="ml-4 mt-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
                        placeholder="Tell us about your thumbnail..." required/>
 
-                <label className="pl-4 block mt-2 text-md font-medium text-gray-900 ">Reward for this task</label>
+                <label className="pl-4 block mt-2 text-md font-medium text-gray-900 ">Vote limit</label>
 
                 <input onChange={(e) => {
                     setAmount(e.target.value);
                 }} type="text" id="amount"
                        className="ml-4 mt-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-                       placeholder="Amount" required/>
+                       placeholder="Number of votes" required/>
 
                 <label className="pl-4 block mt-8 text-md font-medium text-gray-900 ">Add Thumbnails</label>
                 <div className="flex justify-center pt-4 max-w-screen-lg">

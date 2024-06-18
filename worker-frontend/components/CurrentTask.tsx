@@ -19,7 +19,7 @@ const CurrentTask = ({
         task.title ? (
             <div className="p-5 w-full">
                 <h2 className="text-xl font-bold ">{task.title}</h2>
-                <p>Reward: {Number(task.amount) / 1000} eth</p>
+                <p>Reward: { 0.1/Number(task.amount)} sol</p>
                 <div className="flex gap-3 flex-wrap p-5 justify-center">
                     {task.options?.map((option: { id: number; image_url: string; }) => (
                         <div

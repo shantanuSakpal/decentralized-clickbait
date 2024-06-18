@@ -41,6 +41,9 @@ const connection = new Connection(`https://solana-devnet.g.alchemy.com/v2/${ALCH
 const router = Router();
 const prismaClient = new PrismaClient()
 
+//check if database is live
+
+
 
 //routes
 router.post("/generateUploadUrl", authMiddleware, async (req: any, res: any) => {
@@ -234,7 +237,6 @@ router.get("/generateDownloadUrl", authMiddleware, async (req: any, res: any) =>
 //this route will upload the image, using an upload link, you have to send the file with it in body., valid for 5 mins
 
 //sign in with wallet
-//signing a message
 router.post("/auth/signin", async (req: any, res: any) => {
     const {publicKey, signature} = req.body;
     const date = new Date().getHours()

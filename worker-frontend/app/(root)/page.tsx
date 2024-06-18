@@ -59,8 +59,9 @@ export default function Home() {
         return response.data.task
     };
 
-    async function getBalance() {
+    async function getBalance(): Promise<void>{
         setLoading(true);
+        console.log("getting balance")
         const headers = {
             'Content-Type': 'application/json',
             'authorization': localStorage.getItem("token")
@@ -88,7 +89,7 @@ export default function Home() {
     const user = localStorage.getItem("token")
     return (
         <main>
-            <Appbar balance={balance}/>
+            <Appbar balance={balance} getBalance={getBalance} />
             <Hero/>
             {
                 user ? (

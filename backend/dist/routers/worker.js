@@ -58,10 +58,16 @@ router.post("/payout", middleware_1.workerMiddleware, (req, res) => __awaiter(vo
             message: "Worker not found"
         });
     }
+    // Ensure worker has enough pending amount to payout
+    if (worker.pending_amount <= 0) {
+        return res.status(400).json({
+            message: "No pending amount to payout"
+        });
+    }
     const transaction = new web3_js_1.Transaction().add(web3_js_1.SystemProgram.transfer({
         fromPubkey: new web3_js_1.PublicKey("FrzdaX3Mwa8FRfeuXo9vTd7XVQvu6mauPMkCKkp4mP72"),
         toPubkey: new web3_js_1.PublicKey(worker.address),
-        lamports: 100000000,
+        lamports: worker.pending_amount,
     }));
     console.log("payment inittaiated to ", worker.address);
     //convert string to uintarray
@@ -108,7 +114,7 @@ router.post("/payout", middleware_1.workerMiddleware, (req, res) => __awaiter(vo
     //send transaction to solana blockchain
     //actual payout logic
     res.json({
-        message: "transaction initieated"
+        message: "transaction success"
     });
 }));
 //to get balance
@@ -139,7 +145,10 @@ router.post("/submission", middleware_1.workerMiddleware, (req, res) => __awaite
                 message: "Incorrect task id"
             });
         }
-        const amount = (Number(task.amount) / TOTAL_SUBMISSIONS).toString();
+        //0.1 sol is default for every task
+        //task.amount is the total number of votes (vote limit) creator has set for the task
+        const amount = (0.1 * 1000000000 / Number(task.amount)).toString(); //units lamports
+        console.log("reward recieved: ", amount, " lamports");
         const submission = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
             const submission = yield tx.submission.create({
                 data: {
@@ -206,7 +215,6 @@ router.get("/generateDownloadUrl", middleware_1.authMiddleware, (req, res) => __
     res.json({ url });
 }));
 //sign in with wallet
-//signing a message
 router.post("/auth/signin", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { publicKey, signature } = req.body;
     const date = new Date().getHours();

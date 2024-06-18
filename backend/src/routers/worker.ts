@@ -16,7 +16,8 @@ import {createSubmissionInput, createTaskInput, Option, Submission, Worker, Task
 import {getNextTask} from "../db";
 import user from "./user";
 import nacl from "tweetnacl";
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import {Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction} from "@solana/web3.js";
+
 const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 
 const connection = new Connection(`https://solana-devnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`);
@@ -42,7 +43,6 @@ const TOTAL_SUBMISSIONS = 100;
 const TOTAL_DECIMALS = 1000_000;
 
 
-
 //payout
 router.post("/payout", workerMiddleware, async (req, res) => {
     // @ts-ignore
@@ -59,18 +59,24 @@ router.post("/payout", workerMiddleware, async (req, res) => {
             message: "Worker not found"
         })
     }
-
+// Ensure worker has enough pending amount to payout
+    if (worker.pending_amount <= 0) {
+        return res.status(400).json({
+            message: "No pending amount to payout"
+        })
+    }
 
     const transaction = new Transaction().add(
         SystemProgram.transfer({
             fromPubkey: new PublicKey("FrzdaX3Mwa8FRfeuXo9vTd7XVQvu6mauPMkCKkp4mP72"),
             toPubkey: new PublicKey(worker.address),
-            lamports:  worker.pending_amount,
+            lamports: worker.pending_amount,
         })
     );
 
 
-    console.log("payment inittaiated to ",worker.address);
+    console.log("payment inittaiated to ", worker.address);
+
 //convert string to uintarray
 // @ts-ignore
     const secretKey = decode(PRIVATE_KEY);
@@ -87,7 +93,7 @@ router.post("/payout", workerMiddleware, async (req, res) => {
             [keypair],
         );
 
-    } catch(e) {
+    } catch (e) {
         return res.json({
             message: "Transaction failed"
         })
@@ -124,12 +130,9 @@ router.post("/payout", workerMiddleware, async (req, res) => {
     //send transaction to solana blockchain
     //actual payout logic
     res.json({
-        message:"transaction initieated"
+        message: "transaction success"
     })
 })
-
-
-
 
 
 //to get balance
@@ -150,7 +153,6 @@ router.get("/balance", workerMiddleware, async (req, res) => {
 })
 
 
-
 //to make a submission
 router.post("/submission", workerMiddleware, async (req, res) => {
     // @ts-ignore
@@ -166,8 +168,10 @@ router.post("/submission", workerMiddleware, async (req, res) => {
                 message: "Incorrect task id"
             })
         }
-
-        const amount = (Number(task.amount) / TOTAL_SUBMISSIONS).toString();
+        //0.1 sol is default for every task
+        //task.amount is the total number of votes (vote limit) creator has set for the task
+        const amount = (0.1 * 1_000_000_000 / Number(task.amount)).toString(); //units lamports
+        console.log("reward recieved: ", amount, " lamports")
 
         const submission = await prismaClient.$transaction(async tx => {
             const submission = await tx.submission.create({
@@ -196,7 +200,7 @@ router.post("/submission", workerMiddleware, async (req, res) => {
         const nextTask = await getNextTask(Number(userId));
         let next = nextTask != null ? nextTask : "no more tasks"
         res.json({
-            task:next,
+            task: next,
             amount
         })
 
@@ -248,7 +252,6 @@ router.get("/generateDownloadUrl", authMiddleware, async (req: any, res: any) =>
 })
 
 //sign in with wallet
-//signing a message
 router.post("/auth/signin", async (req: any, res: any) => {
     const {publicKey, signature} = req.body;
     const date = new Date().getHours()

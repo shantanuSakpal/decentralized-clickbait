@@ -43,6 +43,7 @@ const s3Client = new client_s3_1.S3Client(s3config);
 const connection = new web3_js_1.Connection(`https://solana-devnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`);
 const router = (0, express_1.Router)();
 const prismaClient = new client_1.PrismaClient();
+//check if database is live
 //routes
 router.post("/generateUploadUrl", middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const userId = req.userId;
@@ -203,7 +204,6 @@ router.get("/generateDownloadUrl", middleware_1.authMiddleware, (req, res) => __
 }));
 //this route will upload the image, using an upload link, you have to send the file with it in body., valid for 5 mins
 //sign in with wallet
-//signing a message
 router.post("/auth/signin", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { publicKey, signature } = req.body;
     const date = new Date().getHours();

@@ -9,8 +9,12 @@ import dynamic from "next/dynamic";
 import {PublicKey, SystemProgram, Transaction} from "@solana/web3.js";
 import {toast} from "react-toastify";
 
+interface AppbarProps {
+    balance: { pendingAmount: number, totalAmount: number };
+    getBalance: () => Promise<void>;  // Define getBalance function type
+}
 
-function Appbar({balance}: { balance: { pendingAmount: number, totalAmount: number } }) {
+function Appbar({balance, getBalance}: AppbarProps) {
     const {publicKey, signMessage} = useWallet();
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
     // add this to sovle hydration error in next js
@@ -54,13 +58,28 @@ function Appbar({balance}: { balance: { pendingAmount: number, totalAmount: numb
 
     const payOut = async () => {
         setLoading(true);
-        const response = axios.post(`${BACKEND_URL}/v1/worker/payout`, {}, {
+        toast.success("Payout initiated...")
+
+        const response =await axios.post(`${BACKEND_URL}/v1/worker/payout`, {}, {
             headers: {
                 "Authorization": localStorage.getItem("token")
             }
         })
+        //error handling
+        //@ts-ignore
+
+        if (response.status !== 200) {
+            setLoading(false);
+            //@ts-ignore
+            console.log(response.data.message)
+            toast.error(response.data.message)
+            return;
+        }
+
         setLoading(false);
         console.log(response)
+        await getBalance();
+        toast.success("Payout successful")
     }
 
     useEffect(() => {
@@ -73,10 +92,10 @@ function Appbar({balance}: { balance: { pendingAmount: number, totalAmount: numb
         <div className="w-full flex justify-between items-center bg-gray-800 text-white p-4">
             <Link href="/" className="font-bold text-2xl text-center ">ClickBait</Link>
             <div className="flex gap-5 items-center">
-                <div className="font-bold text-center">Your Rewards: {balance.pendingAmount}</div>
+                <div className="font-bold text-center">Your Rewards: {balance.pendingAmount / 1_000_000_000} sol</div>
                 {
-                    publicKey && (
-                        <button className="p-3 bg-violet-800 text-white rounded-lg font-bold" onClick={payOut}>
+                    publicKey && balance.pendingAmount>0 && (
+                        <button className="p-3 bg-violet-800 text-white rounded-lg font-bold" disabled={loading} onClick={payOut}>
                             {
                                 loading ? "Loading..." : "Payout"
                             }
